@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,13 +10,36 @@ const requiredColumns = [
   'VALUE', 'No of trades'
 ];
 
-const FileUpload = ({ onFileUpload, disabled }) => {
+interface CSVRow {
+  Date: string;
+  series: string;
+  OPEN: string;
+  HIGH: string;
+  LOW: string;
+  'PREV. CLOSE': string;
+  ltp: string;
+  close: string;
+  vwap: string;
+  '52W H': string;
+  '52W L': string;
+  VOLUME: string;
+  VALUE: string;
+  'No of trades': string;
+  [key: string]: string;
+}
+
+interface FileUploadProps {
+  onFileUpload: (data: CSVRow[]) => void;
+  disabled: boolean;
+}
+
+const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateCSV = (data) => {
+  const validateCSV = (data: CSVRow[]) => {
     if (!data || data.length === 0) {
       throw new Error('CSV file is empty');
     }
@@ -54,7 +76,7 @@ const FileUpload = ({ onFileUpload, disabled }) => {
     return true;
   };
 
-  const handleFileUpload = (file) => {
+  const handleFileUpload = (file: File | null) => {
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.csv')) {
@@ -75,16 +97,17 @@ const FileUpload = ({ onFileUpload, disabled }) => {
       skipEmptyLines: true,
       complete: (results) => {
         try {
-          validateCSV(results.data);
+          const csvData = results.data as CSVRow[];
+          validateCSV(csvData);
           
           // Sort by date
-          const sortedData = results.data.sort((a, b) => 
-            new Date(a.Date) - new Date(b.Date)
+          const sortedData = csvData.sort((a: CSVRow, b: CSVRow) => 
+            new Date(a.Date).getTime() - new Date(b.Date).getTime()
           );
 
           onFileUpload(sortedData);
         } catch (err) {
-          setError(err.message);
+          setError((err as Error).message);
           setFileName('');
         }
       },
@@ -95,7 +118,7 @@ const FileUpload = ({ onFileUpload, disabled }) => {
     });
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
     
@@ -105,12 +128,12 @@ const FileUpload = ({ onFileUpload, disabled }) => {
     }
   };
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(true);
   };
 
-  const handleDragLeave = (e) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
   };
@@ -148,7 +171,7 @@ const FileUpload = ({ onFileUpload, disabled }) => {
           ref={fileInputRef}
           type="file"
           accept=".csv"
-          onChange={(e) => handleFileUpload(e.target.files?.[0])}
+          onChange={(e) => handleFileUpload(e.target.files?.[0] || null)}
           className="hidden"
           disabled={disabled}
         />

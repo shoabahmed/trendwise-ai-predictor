@@ -5,7 +5,59 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, BarChart3, Activity } from 'lucide-react';
 
-const StockChart = ({ data, predictions }) => {
+interface StockData {
+  Date: string;
+  series: string;
+  OPEN: string;
+  HIGH: string;
+  LOW: string;
+  'PREV. CLOSE': string;
+  ltp: string;
+  close: string;
+  vwap: string;
+  '52W H': string;
+  '52W L': string;
+  VOLUME: string;
+  VALUE: string;
+  'No of trades': string;
+}
+
+interface Predictions {
+  targetPrice: number;
+  predictedHigh: number;
+  predictedLow: number;
+  confidence: number;
+  volatility: number;
+  recommendation: string;
+}
+
+interface ChartDataPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  index: number;
+  predicted?: boolean;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    payload: ChartDataPoint;
+    value: number;
+    dataKey: string;
+  }>;
+  label?: string;
+}
+
+interface StockChartProps {
+  data: StockData[] | null;
+  predictions: Predictions | null;
+}
+
+const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
   const chartData = useMemo(() => {
     if (!data) return [];
     
@@ -35,7 +87,9 @@ const StockChart = ({ data, predictions }) => {
         high: predictions.predictedHigh,
         low: predictions.predictedLow,
         predicted: true,
-        index: chartData.length
+        index: chartData.length,
+        open: 0,
+        volume: 0
       }
     ];
   }, [predictions, chartData]);
@@ -44,7 +98,7 @@ const StockChart = ({ data, predictions }) => {
     return [...chartData, ...(predictionData.length > 1 ? [predictionData[1]] : [])];
   }, [chartData, predictionData]);
 
-  const CustomTooltip = ({ active, payload, label }) => {
+  const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const isPredicted = data.predicted;
@@ -54,11 +108,11 @@ const StockChart = ({ data, predictions }) => {
           <p className="font-medium">{label}</p>
           {isPredicted && <p className="text-xs text-blue-600 font-medium">PREDICTED</p>}
           <div className="space-y-1 text-sm">
-            {data.open && <p>Open: ${data.open.toFixed(2)}</p>}
+            {data.open > 0 && <p>Open: ${data.open.toFixed(2)}</p>}
             <p>Close: ${data.close.toFixed(2)}</p>
-            {data.high && <p>High: ${data.high.toFixed(2)}</p>}
-            {data.low && <p>Low: ${data.low.toFixed(2)}</p>}
-            {data.volume && <p>Volume: {data.volume.toLocaleString()}</p>}
+            {data.high > 0 && <p>High: ${data.high.toFixed(2)}</p>}
+            {data.low > 0 && <p>Low: ${data.low.toFixed(2)}</p>}
+            {data.volume > 0 && <p>Volume: {data.volume.toLocaleString()}</p>}
           </div>
         </div>
       );
@@ -110,7 +164,7 @@ const StockChart = ({ data, predictions }) => {
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis dataKey="date" tick={{ fontSize: 10 }} />
         <YAxis tick={{ fontSize: 10 }} />
-        <Tooltip />
+        <Tooltip content={<CustomTooltip />} />
         <Area 
           type="monotone" 
           dataKey="volume" 
