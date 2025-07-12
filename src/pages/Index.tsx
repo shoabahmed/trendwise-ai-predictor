@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, TrendingUp, BarChart3, Download, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Upload, TrendingUp, BarChart3, Download, AlertCircle, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';

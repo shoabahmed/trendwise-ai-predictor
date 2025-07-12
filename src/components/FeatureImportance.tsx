@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell } from 'recharts';
 import { Sparkles, TrendingUp, Activity } from 'lucide-react';
 
 interface FeatureData {
@@ -76,10 +76,11 @@ const FeatureImportance: React.FC = () => {
                   <XAxis type="number" />
                   <YAxis dataKey="feature" type="category" width={100} tick={{ fontSize: 10 }} />
                   <Tooltip />
-                  <Bar 
-                    dataKey="importance" 
-                    fill={(entry) => categoryColors[entry.category] || '#6b7280'}
-                  />
+                  <Bar dataKey="importance">
+                    {featureData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={categoryColors[entry.category]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
