@@ -43,6 +43,7 @@ interface ChartDataPoint {
   trades: number;
   dailyReturn: number;
   index: number;
+  originalDate: string;
   predicted?: boolean;
 }
 
@@ -175,7 +176,8 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
       vwap: predictions.targetPrice,
       value: 0,
       trades: 0,
-      dailyReturn: 0
+      dailyReturn: 0,
+      originalDate: 'Predicted'
     };
     
     return [lastDataPoint, predictionPoint];
@@ -302,11 +304,10 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         />
         <YAxis tick={{ fontSize: 10 }} />
         <Tooltip content={<CustomTooltip />} />
-        <Bar dataKey="dailyReturn">
+        <Bar dataKey="dailyReturn" fill={(entry: any) => entry.dailyReturn >= 0 ? '#10b981' : '#ef4444'}>
           {chartData.map((entry, index) => (
             <Bar 
               key={`cell-${index}`}
-              dataKey="dailyReturn"
               fill={entry.dailyReturn >= 0 ? '#10b981' : '#ef4444'} 
             />
           ))}
