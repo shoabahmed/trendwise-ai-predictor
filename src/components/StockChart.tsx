@@ -1,6 +1,5 @@
-
 import React, { useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Area, AreaChart } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, BarChart3, Activity } from 'lucide-react';
@@ -59,43 +58,94 @@ interface StockChartProps {
 
 const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
   const chartData = useMemo(() => {
-    if (!data) return [];
+    if (!data || data.length === 0) return [];
     
-    return data.slice(-30).map((row, index) => ({
-      date: new Date(row.Date).toLocaleDateString(),
-      open: parseFloat(row.OPEN),
-      high: parseFloat(row.HIGH),
-      low: parseFloat(row.LOW),
-      close: parseFloat(row.close),
-      volume: parseFloat(row.VOLUME),
-      index: index
-    }));
+    console.log('📊 Processing stock data for chart:', data.length, 'rows');
+    console.log('📋 Sample data row:', data[0]);
+    
+    // Take last 30 rows and process them properly
+    const recentData = data.slice(-30);
+    
+    const processedData = recentData.map((row, index) => {
+      // Parse date properly
+      const dateStr = row.Date;
+      let formattedDate = dateStr;
+      
+      // Handle different date formats
+      try {
+        const parsedDate = new Date(dateStr);
+        if (!isNaN(parsedDate.getTime())) {
+          formattedDate = parsedDate.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: '2-digit',
+            year: '2-digit'
+          });
+        }
+      } catch (e) {
+        console.warn('Date parsing failed for:', dateStr);
+        formattedDate = dateStr;
+      }
+      
+      // Parse numeric values safely
+      const parseNumber = (value: string | number): number => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          const cleaned = value.replace(/,/g, '');
+          const parsed = parseFloat(cleaned);
+          return isNaN(parsed) ? 0 : parsed;
+        }
+        return 0;
+      };
+      
+      const processedRow = {
+        date: formattedDate,
+        open: parseNumber(row.OPEN),
+        high: parseNumber(row.HIGH),
+        low: parseNumber(row.LOW),
+        close: parseNumber(row.close),
+        volume: parseNumber(row.VOLUME),
+        index: index
+      };
+      
+      console.log(`📈 Processed row ${index}:`, processedRow);
+      return processedRow;
+    });
+    
+    console.log('✅ Final chart data:', processedData);
+    return processedData;
   }, [data]);
 
   const predictionData = useMemo(() => {
     if (!predictions || !chartData.length) return [];
     
     const lastDataPoint = chartData[chartData.length - 1];
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + 1);
     
-    return [
-      lastDataPoint,
-      {
-        date: tomorrow.toLocaleDateString(),
-        close: predictions.targetPrice,
-        high: predictions.predictedHigh,
-        low: predictions.predictedLow,
-        predicted: true,
-        index: chartData.length,
-        open: 0,
-        volume: 0
-      }
-    ];
+    const predictionPoint = {
+      date: nextDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: '2-digit',
+        year: '2-digit'
+      }),
+      close: predictions.targetPrice,
+      high: predictions.predictedHigh,
+      low: predictions.predictedLow,
+      predicted: true,
+      index: chartData.length,
+      open: lastDataPoint.close,
+      volume: 0
+    };
+    
+    return [lastDataPoint, predictionPoint];
   }, [predictions, chartData]);
 
   const combinedData = useMemo(() => {
-    return [...chartData, ...(predictionData.length > 1 ? [predictionData[1]] : [])];
+    const combined = [...chartData];
+    if (predictionData.length > 1) {
+      combined.push(predictionData[1]);
+    }
+    return combined;
   }, [chartData, predictionData]);
 
   const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label }) => {
@@ -108,10 +158,10 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
           <p className="font-medium">{label}</p>
           {isPredicted && <p className="text-xs text-blue-600 font-medium">PREDICTED</p>}
           <div className="space-y-1 text-sm">
-            {data.open > 0 && <p>Open: ${data.open.toFixed(2)}</p>}
-            <p>Close: ${data.close.toFixed(2)}</p>
-            {data.high > 0 && <p>High: ${data.high.toFixed(2)}</p>}
-            {data.low > 0 && <p>Low: ${data.low.toFixed(2)}</p>}
+            {data.open > 0 && <p>Open: ₹{data.open.toFixed(2)}</p>}
+            <p>Close: ₹{data.close.toFixed(2)}</p>
+            {data.high > 0 && <p>High: ₹{data.high.toFixed(2)}</p>}
+            {data.low > 0 && <p>Low: ₹{data.low.toFixed(2)}</p>}
             {data.volume > 0 && <p>Volume: {data.volume.toLocaleString()}</p>}
           </div>
         </div>
@@ -134,26 +184,26 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         <YAxis tick={{ fontSize: 12 }} />
         <Tooltip content={<CustomTooltip />} />
         
-        {/* Historical data */}
         <Line 
           type="monotone" 
           dataKey="close" 
           stroke="#2563eb" 
           strokeWidth={2}
-          dot={false}
+          dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
           connectNulls={false}
         />
         
-        {/* Prediction line */}
-        <Line 
-          type="monotone" 
-          dataKey="close" 
-          stroke="#dc2626" 
-          strokeWidth={3}
-          strokeDasharray="5 5"
-          dot={{ fill: '#dc2626', strokeWidth: 2, r: 6 }}
-          connectNulls={false}
-        />
+        {predictionData.length > 1 && (
+          <Line 
+            type="monotone" 
+            dataKey="close" 
+            stroke="#dc2626" 
+            strokeWidth={3}
+            strokeDasharray="5 5"
+            dot={{ fill: '#dc2626', strokeWidth: 2, r: 6 }}
+            connectNulls={false}
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

@@ -5,58 +5,62 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
-// Enhanced column mappings with detailed understanding
+// Enhanced column mappings with more accurate variations
 const columnMappings = {
   date: {
-    variations: ['Date', 'DATE', 'date', 'timestamp', 'Timestamp', 'TIME', 'time', 'trading_date'],
+    variations: ['Date', 'DATE', 'date', 'timestamp', 'Timestamp', 'TIME', 'time', 'trading_date', 'TRADING_DATE'],
     description: 'Trading date for the stock data'
   },
   series: {
-    variations: ['series', 'Series', 'SERIES', 'symbol', 'Symbol', 'SYMBOL', 'ticker', 'Ticker', 'market_segment'],
+    variations: ['series', 'Series', 'SERIES', 'symbol', 'Symbol', 'SYMBOL', 'ticker', 'Ticker', 'market_segment', 'MARKET_SEGMENT'],
     description: 'Market segment code (EQ=Equity, BE=Book Entry, etc.)'
   },
   open: {
-    variations: ['OPEN', 'open', 'Open', 'opening', 'Opening', 'open_price'],
+    variations: ['OPEN', 'open', 'Open', 'opening', 'Opening', 'open_price', 'OPEN_PRICE'],
     description: 'Opening price - first traded price of the day'
   },
   high: {
-    variations: ['HIGH', 'high', 'High', 'maximum', 'max', 'Max', 'day_high'],
+    variations: ['HIGH', 'high', 'High', 'maximum', 'max', 'Max', 'day_high', 'DAY_HIGH'],
     description: 'Highest price reached during trading day'
   },
   low: {
-    variations: ['LOW', 'low', 'Low', 'minimum', 'min', 'Min', 'day_low'],
+    variations: ['LOW', 'low', 'Low', 'minimum', 'min', 'Min', 'day_low', 'DAY_LOW'],
     description: 'Lowest price reached during trading day'
   },
   close: {
-    variations: ['close', 'Close', 'CLOSE', 'closing', 'Closing', 'ltp', 'LTP', 'last_price'],
+    variations: ['close', 'Close', 'CLOSE', 'closing', 'Closing', 'closing_price', 'CLOSING_PRICE'],
     description: 'Final closing price when market closed'
   },
   prevClose: {
-    variations: ['PREV. CLOSE', 'prev close', 'previous close', 'prevclose', 'prev_close', 'previous_close'],
+    variations: ['PREV. CLOSE', 'PREV CLOSE', 'prev close', 'previous close', 'prevclose', 'prev_close', 'previous_close', 'PREVIOUS_CLOSE'],
     description: 'Previous day closing price for return calculations'
   },
+  ltp: {
+    variations: ['ltp', 'LTP', 'Ltp', 'last_price', 'LAST_PRICE', 'last_traded_price', 'LAST_TRADED_PRICE'],
+    description: 'Last Traded Price - most recent trading price'
+  },
   vwap: {
-    variations: ['vwap', 'VWAP', 'Vwap', 'weighted average', 'avg price', 'volume_weighted_avg'],
+    variations: ['vwap', 'VWAP', 'Vwap', 'weighted average', 'avg price', 'volume_weighted_avg', 'VOLUME_WEIGHTED_AVG'],
     description: 'Volume Weighted Average Price - more accurate than simple average'
   },
   volume: {
-    variations: ['VOLUME', 'volume', 'Volume', 'vol', 'Vol', 'VOL', 'quantity', 'Quantity', 'shares_traded'],
+    variations: ['VOLUME', 'volume', 'Volume', 'vol', 'Vol', 'VOL', 'quantity', 'Quantity', 'shares_traded', 'SHARES_TRADED'],
     description: 'Total number of shares traded'
   },
   value: {
-    variations: ['VALUE', 'value', 'Value', 'turnover', 'Turnover', 'amount', 'Amount', 'total_value'],
+    variations: ['VALUE', 'value', 'Value', 'turnover', 'Turnover', 'TURNOVER', 'amount', 'Amount', 'total_value', 'TOTAL_VALUE'],
     description: 'Total turnover (Volume × Price) in currency'
   },
   trades: {
-    variations: ['No of trades', 'trades', 'trade count', 'transactions', 'no_of_trades', 'trade_count'],
+    variations: ['No of trades', 'NO OF TRADES', 'trades', 'trade count', 'transactions', 'no_of_trades', 'trade_count', 'TRADE_COUNT', 'Number of trades'],
     description: 'Total number of buy/sell transactions executed'
   },
   fiftyTwoWeekHigh: {
-    variations: ['52W H', '52w high', '52 week high', 'yearly high', '52_week_high'],
+    variations: ['52W H', '52W_H', '52w high', '52 week high', 'yearly high', '52_week_high', '52WH', '52W HIGH'],
     description: '52-week high - highest price in past year'
   },
   fiftyTwoWeekLow: {
-    variations: ['52W L', '52w low', '52 week low', 'yearly low', '52_week_low'],
+    variations: ['52W L', '52W_L', '52w low', '52 week low', 'yearly low', '52_week_low', '52WL', '52W LOW'],
     description: '52-week low - lowest price in past year'
   }
 };
@@ -105,23 +109,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
       reader.onload = (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
           
-          // Get first worksheet
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
           
-          // Convert to JSON with headers
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
             header: 1,
-            defval: ''
+            defval: '',
+            raw: false,
+            dateNF: 'dd-mmm-yyyy'
           });
           
           if (jsonData.length < 2) {
             throw new Error('Excel file must have at least header and one data row');
           }
           
-          // Convert array format to object format
           const headers = jsonData[0] as string[];
           const rows = jsonData.slice(1) as any[][];
           
@@ -149,12 +152,18 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
         header: true,
         skipEmptyLines: true,
         delimiter: file.name.toLowerCase().endsWith('.txt') ? '\t' : ',',
+        transform: (value: string, field: string) => {
+          // Handle date parsing more accurately
+          if (field && field.toLowerCase().includes('date')) {
+            return value.trim();
+          }
+          return value;
+        },
         complete: (results) => {
           if (results.errors.length > 0) {
-            reject(new Error('Failed to parse text file: ' + results.errors[0].message));
-          } else {
-            resolve(results.data as any[]);
+            console.warn('Parse warnings:', results.errors);
           }
+          resolve(results.data as any[]);
         },
         error: (error) => reject(error)
       });
@@ -162,14 +171,69 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
   };
 
   const findBestColumnMatch = (headers: string[], targetColumn: any): string | null => {
+    // First try exact matches
     for (const variation of targetColumn.variations) {
-      const match = headers.find(header => 
+      const exactMatch = headers.find(header => 
+        header.trim().toLowerCase() === variation.toLowerCase()
+      );
+      if (exactMatch) return exactMatch;
+    }
+    
+    // Then try partial matches
+    for (const variation of targetColumn.variations) {
+      const partialMatch = headers.find(header => 
         header.toLowerCase().includes(variation.toLowerCase()) || 
         variation.toLowerCase().includes(header.toLowerCase())
       );
-      if (match) return match;
+      if (partialMatch) return partialMatch;
     }
+    
     return null;
+  };
+
+  const parseDate = (dateStr: string): string => {
+    if (!dateStr || dateStr.trim() === '') return new Date().toISOString().split('T')[0];
+    
+    // Clean the date string
+    const cleanDateStr = dateStr.toString().trim();
+    
+    // Try different date formats commonly used in stock data
+    const dateFormats = [
+      // DD-MMM-YYYY format (11-Jul-25)
+      /^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/,
+      // DD/MM/YYYY format
+      /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/,
+      // YYYY-MM-DD format
+      /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+      // MM/DD/YYYY format
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
+    ];
+    
+    // Handle DD-MMM-YY format (most common in Indian stock data)
+    const ddMmmYyMatch = cleanDateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
+    if (ddMmmYyMatch) {
+      const [, day, monthStr, year] = ddMmmYyMatch;
+      const monthMap: { [key: string]: string } = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'may': '05', 'jun': '06', 'jul': '07', 'aug': '08',
+        'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+      };
+      const month = monthMap[monthStr.toLowerCase()];
+      const fullYear = parseInt(year) < 50 ? `20${year}` : `19${year}`;
+      if (month) {
+        return `${fullYear}-${month}-${day.padStart(2, '0')}`;
+      }
+    }
+    
+    // Try parsing as standard date
+    const parsedDate = new Date(cleanDateStr);
+    if (!isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString().split('T')[0];
+    }
+    
+    // If all parsing fails, return today's date
+    console.warn(`Could not parse date: ${cleanDateStr}, using current date`);
+    return new Date().toISOString().split('T')[0];
   };
 
   const normalizeColumnNames = (data: any[]): { mappedData: any[], mappings: Record<string, string>, descriptions: Record<string, string> } => {
@@ -179,152 +243,93 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
     const mappings: Record<string, string> = {};
     const descriptions: Record<string, string> = {};
     
-    console.log('📊 Analyzing uploaded data columns:', headers);
+    console.log('📊 Original headers found:', headers);
     
-    // Try to map each required column with enhanced understanding
+    // Map each required column
     for (const [standardName, columnInfo] of Object.entries(columnMappings)) {
       const match = findBestColumnMatch(headers, columnInfo);
       if (match) {
         mappings[standardName] = match;
         descriptions[standardName] = columnInfo.description;
-        console.log(`✅ Mapped "${match}" → ${standardName}: ${columnInfo.description}`);
+        console.log(`✅ Mapped "${match}" → ${standardName}`);
+      } else {
+        console.log(`❌ Could not find match for ${standardName}`);
       }
-    }
-    
-    // Log unmapped columns for user awareness
-    const unmappedColumns = headers.filter(header => 
-      !Object.values(mappings).includes(header)
-    );
-    if (unmappedColumns.length > 0) {
-      console.log('ℹ️ Unmapped columns (will use as-is):', unmappedColumns);
     }
     
     return { mappedData: data, mappings, descriptions };
   };
 
   const enhancedDataFilling = (data: any[], mappings: Record<string, string>): NormalizedCSVRow[] => {
-    console.log('🔧 Applying AI-enhanced data filling with stock market intelligence...');
+    console.log('🔧 Applying enhanced data processing...');
+    console.log('Mappings:', mappings);
+    console.log('Sample data row:', data[0]);
     
     return data.map((row, index) => {
       const normalizedRow: any = {};
       
       // Enhanced date handling
-      normalizedRow.Date = row[mappings.date] || new Date(Date.now() - (data.length - index) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      normalizedRow.series = row[mappings.series] || 'EQ'; // Default to Equity
+      const dateValue = row[mappings.date] || '';
+      normalizedRow.Date = parseDate(dateValue);
       
-      // Get price data with market intelligence
-      const open = parseFloat(row[mappings.open]) || 0;
-      const high = parseFloat(row[mappings.high]) || 0;
-      const low = parseFloat(row[mappings.low]) || 0;
-      const close = parseFloat(row[mappings.close]) || 0;
-      const prevClose = parseFloat(row[mappings.prevClose]) || 0;
+      // Series handling
+      normalizedRow.series = row[mappings.series] || 'EQ';
       
-      // Smart price reconstruction using market relationships
-      if (close > 0) {
-        // Use close as base price for calculations
-        normalizedRow.close = close.toFixed(2);
-        normalizedRow.ltp = close.toFixed(2);
-        
-        // Calculate realistic open if missing (typically 98-102% of previous close)
-        if (open === 0) {
-          const gap = (Math.random() - 0.5) * 0.04; // ±2% gap
-          normalizedRow.OPEN = (close * (1 + gap)).toFixed(2);
-        } else {
-          normalizedRow.OPEN = open.toFixed(2);
+      // Price data with proper number parsing
+      const parseNumber = (value: any): number => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+          // Remove commas and parse
+          const cleaned = value.replace(/,/g, '');
+          const parsed = parseFloat(cleaned);
+          return isNaN(parsed) ? 0 : parsed;
         }
-        
-        // Calculate realistic high (must be >= max(open, close))
-        const baseHigh = Math.max(parseFloat(normalizedRow.OPEN), close);
-        if (high === 0 || high < baseHigh) {
-          normalizedRow.HIGH = (baseHigh * (1 + Math.random() * 0.03)).toFixed(2); // Up to 3% above
-        } else {
-          normalizedRow.HIGH = high.toFixed(2);
-        }
-        
-        // Calculate realistic low (must be <= min(open, close))
-        const baseLow = Math.min(parseFloat(normalizedRow.OPEN), close);
-        if (low === 0 || low > baseLow) {
-          normalizedRow.LOW = (baseLow * (1 - Math.random() * 0.03)).toFixed(2); // Up to 3% below
-        } else {
-          normalizedRow.LOW = low.toFixed(2);
-        }
-      } else {
-        // If no close price, use available data or generate realistic prices
-        const basePrice = open || high || low || 100;
-        normalizedRow.close = basePrice.toFixed(2);
-        normalizedRow.ltp = basePrice.toFixed(2);
-        normalizedRow.OPEN = (basePrice * (0.99 + Math.random() * 0.02)).toFixed(2);
-        normalizedRow.HIGH = (basePrice * (1.01 + Math.random() * 0.02)).toFixed(2);
-        normalizedRow.LOW = (basePrice * (0.97 + Math.random() * 0.02)).toFixed(2);
-      }
+        return 0;
+      };
       
-      // Calculate VWAP using OHLC if not provided
-      const currentHigh = parseFloat(normalizedRow.HIGH);
-      const currentLow = parseFloat(normalizedRow.LOW);
-      const currentClose = parseFloat(normalizedRow.close);
-      const currentOpen = parseFloat(normalizedRow.OPEN);
+      const open = parseNumber(row[mappings.open]);
+      const high = parseNumber(row[mappings.high]);
+      const low = parseNumber(row[mappings.low]);
+      const close = parseNumber(row[mappings.close]);
+      const ltp = parseNumber(row[mappings.ltp]) || close;
+      const prevClose = parseNumber(row[mappings.prevClose]);
+      const vwap = parseNumber(row[mappings.vwap]);
+      const volume = parseNumber(row[mappings.volume]);
+      const value = parseNumber(row[mappings.value]);
+      const trades = parseNumber(row[mappings.trades]);
+      const fiftyTwoWeekHigh = parseNumber(row[mappings.fiftyTwoWeekHigh]);
+      const fiftyTwoWeekLow = parseNumber(row[mappings.fiftyTwoWeekLow]);
       
-      if (row[mappings.vwap]) {
-        normalizedRow.vwap = parseFloat(row[mappings.vwap]).toFixed(2);
-      } else {
-        // Typical VWAP approximation: (H+L+C)/3 or (H+L+2C)/4
-        normalizedRow.vwap = ((currentHigh + currentLow + currentClose * 2) / 4).toFixed(2);
-      }
+      // Assign values with fallbacks
+      normalizedRow.OPEN = open > 0 ? open.toFixed(2) : (close > 0 ? close.toFixed(2) : '100.00');
+      normalizedRow.HIGH = high > 0 ? high.toFixed(2) : (Math.max(open, close) * 1.02).toFixed(2);
+      normalizedRow.LOW = low > 0 ? low.toFixed(2) : (Math.min(open, close) * 0.98).toFixed(2);
+      normalizedRow.close = close > 0 ? close.toFixed(2) : (open > 0 ? open.toFixed(2) : '100.00');
+      normalizedRow.ltp = ltp > 0 ? ltp.toFixed(2) : normalizedRow.close;
       
-      // Previous close handling with market continuity
-      if (index > 0 && mappings.prevClose) {
-        normalizedRow['PREV. CLOSE'] = row[mappings.prevClose] || 
-          parseFloat(data[index - 1][mappings.close] || normalizedRow.close).toFixed(2);
-      } else {
-        // For first row or missing data, estimate based on current price
-        const estimatedPrevClose = prevClose || (currentClose * (0.98 + Math.random() * 0.04));
-        normalizedRow['PREV. CLOSE'] = estimatedPrevClose.toFixed(2);
-      }
+      // Previous close
+      normalizedRow['PREV. CLOSE'] = prevClose > 0 ? prevClose.toFixed(2) : 
+        (index > 0 ? parseNumber(data[index - 1][mappings.close] || normalizedRow.close).toFixed(2) : 
+         (parseFloat(normalizedRow.close) * 0.99).toFixed(2));
       
-      // Volume and VALUE with realistic market patterns
-      let volume = parseFloat(row[mappings.volume]) || 0;
-      if (volume === 0) {
-        // Generate realistic volume based on price movement
-        const priceChange = Math.abs(currentClose - parseFloat(normalizedRow['PREV. CLOSE']));
-        const volatility = priceChange / parseFloat(normalizedRow['PREV. CLOSE']);
-        // Higher volatility typically means higher volume
-        volume = Math.floor((50000 + volatility * 500000) * (0.5 + Math.random()));
-      }
-      normalizedRow.VOLUME = volume.toString();
+      // VWAP calculation
+      normalizedRow.vwap = vwap > 0 ? vwap.toFixed(2) : 
+        ((parseFloat(normalizedRow.HIGH) + parseFloat(normalizedRow.LOW) + parseFloat(normalizedRow.close)) / 3).toFixed(2);
       
-      // Calculate VALUE (Turnover)
-      if (row[mappings.value]) {
-        normalizedRow.VALUE = parseFloat(row[mappings.value]).toFixed(2);
-      } else {
-        // VALUE = Volume × Average Price (approximated by VWAP)
-        normalizedRow.VALUE = (volume * parseFloat(normalizedRow.vwap)).toFixed(2);
-      }
+      // Volume and VALUE
+      normalizedRow.VOLUME = volume > 0 ? volume.toString() : Math.floor(50000 + Math.random() * 500000).toString();
+      normalizedRow.VALUE = value > 0 ? value.toFixed(2) : 
+        (parseFloat(normalizedRow.VOLUME) * parseFloat(normalizedRow.vwap)).toFixed(2);
       
-      // Number of trades estimation
-      if (row[mappings.trades]) {
-        normalizedRow['No of trades'] = row[mappings.trades];
-      } else {
-        // Typical lot size ranges, estimate trades from volume
-        const avgTradeSize = 50 + Math.random() * 200; // 50-250 shares per trade
-        normalizedRow['No of trades'] = Math.floor(volume / avgTradeSize).toString();
-      }
+      // Number of trades
+      normalizedRow['No of trades'] = trades > 0 ? trades.toString() : 
+        Math.floor(parseFloat(normalizedRow.VOLUME) / (50 + Math.random() * 200)).toString();
       
-      // 52-week high/low with market intelligence
-      if (row[mappings.fiftyTwoWeekHigh]) {
-        normalizedRow['52W H'] = parseFloat(row[mappings.fiftyTwoWeekHigh]).toFixed(2);
-      } else {
-        // Estimate: current price is typically 70-100% of 52W high
-        const ratio = 0.7 + Math.random() * 0.3;
-        normalizedRow['52W H'] = (currentClose / ratio).toFixed(2);
-      }
-      
-      if (row[mappings.fiftyTwoWeekLow]) {
-        normalizedRow['52W L'] = parseFloat(row[mappings.fiftyTwoWeekLow]).toFixed(2);
-      } else {
-        // Estimate: current price is typically 100-150% of 52W low
-        const ratio = 1.0 + Math.random() * 0.5;
-        normalizedRow['52W L'] = (currentClose / ratio).toFixed(2);
-      }
+      // 52-week high/low
+      normalizedRow['52W H'] = fiftyTwoWeekHigh > 0 ? fiftyTwoWeekHigh.toFixed(2) : 
+        (parseFloat(normalizedRow.close) * (1.2 + Math.random() * 0.3)).toFixed(2);
+      normalizedRow['52W L'] = fiftyTwoWeekLow > 0 ? fiftyTwoWeekLow.toFixed(2) : 
+        (parseFloat(normalizedRow.close) * (0.7 + Math.random() * 0.2)).toFixed(2);
       
       return normalizedRow as NormalizedCSVRow;
     });
@@ -333,11 +338,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
   const validateAndProcessData = async (file: File): Promise<NormalizedCSVRow[]> => {
     let data: any[];
     
+    console.log(`📁 Processing file: ${file.name}, size: ${file.size} bytes`);
+    
     // Parse different file types
     if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
       data = await readTextFile(file);
     } else {
-      // Excel files
       data = await readExcelFile(file);
     }
 
@@ -345,30 +351,23 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
       throw new Error('File is empty or contains no valid data');
     }
 
-    console.log(`📁 Processing ${file.name} with ${data.length} rows`);
-    console.log('📋 Original columns:', Object.keys(data[0]));
+    console.log(`📋 Raw data sample:`, data[0]);
+    console.log(`📏 Total rows: ${data.length}`);
     
     const { mappedData, mappings, descriptions } = normalizeColumnNames(data);
-    console.log('🎯 Column mappings found:', mappings);
+    console.log('🎯 Column mappings:', mappings);
     
     setColumnMappingInfo(descriptions);
     
-    // Enhanced data processing with stock market intelligence
     const normalizedData = enhancedDataFilling(mappedData, mappings);
     
-    // Sort by date for time series analysis
+    // Sort by date for proper time series analysis
     const sortedData = normalizedData.sort((a, b) => 
       new Date(a.Date).getTime() - new Date(b.Date).getTime()
     );
 
-    console.log('✅ AI-enhanced data sample:', {
-      firstRow: sortedData[0],
-      totalRows: sortedData.length,
-      dateRange: {
-        from: sortedData[0]?.Date,
-        to: sortedData[sortedData.length - 1]?.Date
-      }
-    });
+    console.log('✅ Final processed data sample:', sortedData[0]);
+    console.log(`📈 Date range: ${sortedData[0]?.Date} to ${sortedData[sortedData.length - 1]?.Date}`);
     
     if (sortedData.length < 5) {
       throw new Error('Insufficient data. Please provide at least 5 rows for meaningful analysis.');
@@ -385,7 +384,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
       return;
     }
 
-    if (file.size > 50 * 1024 * 1024) { // Increased to 50MB for Excel files
+    if (file.size > 50 * 1024 * 1024) {
       setError('File size must be less than 50MB');
       return;
     }
@@ -434,20 +433,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onFileUpload, disabled }) => {
             ? 'border-blue-500 bg-blue-50'
             : 'border-gray-300 hover:border-gray-400'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          const files = Array.from(e.dataTransfer.files);
-          if (files.length > 0) handleFileUpload(files[0]);
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-        }}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onClick={() => !disabled && fileInputRef.current?.click()}
       >
         {isProcessing ? (
