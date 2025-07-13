@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Area, AreaChart, BarChart, Bar } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -302,13 +301,11 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         />
         <YAxis tick={{ fontSize: 10 }} />
         <Tooltip content={<CustomTooltip />} />
-        <Bar 
-          dataKey="dailyReturn"
-          fill={(entry) => entry.dailyReturn >= 0 ? '#10b981' : '#ef4444'}
-        >
+        <Bar dataKey="dailyReturn">
           {chartData.map((entry, index) => (
             <Bar 
-              key={`cell-${index}`} 
+              key={`cell-${index}`}
+              dataKey="dailyReturn"
               fill={entry.dailyReturn >= 0 ? '#10b981' : '#ef4444'} 
             />
           ))}
