@@ -1,8 +1,9 @@
+
 import React, { useMemo } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Area, AreaChart, BarChart, Bar } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, BarChart3, Activity } from 'lucide-react';
+import { TrendingUp, BarChart3, Activity, DollarSign, TrendingDown } from 'lucide-react';
 
 interface StockData {
   Date: string;
@@ -32,11 +33,16 @@ interface Predictions {
 
 interface ChartDataPoint {
   date: string;
+  dateSort: Date;
   open: number;
   high: number;
   low: number;
   close: number;
   volume: number;
+  vwap: number;
+  value: number;
+  trades: number;
+  dailyReturn: number;
   index: number;
   predicted?: boolean;
 }
@@ -61,32 +67,9 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
     if (!data || data.length === 0) return [];
     
     console.log('📊 Processing stock data for chart:', data.length, 'rows');
-    console.log('📋 Sample data row:', data[0]);
     
-    // Take last 30 rows and process them properly
-    const recentData = data.slice(-30);
-    
-    const processedData = recentData.map((row, index) => {
-      // Parse date properly
-      const dateStr = row.Date;
-      let formattedDate = dateStr;
-      
-      // Handle different date formats
-      try {
-        const parsedDate = new Date(dateStr);
-        if (!isNaN(parsedDate.getTime())) {
-          formattedDate = parsedDate.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: '2-digit',
-            year: '2-digit'
-          });
-        }
-      } catch (e) {
-        console.warn('Date parsing failed for:', dateStr);
-        formattedDate = dateStr;
-      }
-      
-      // Parse numeric values safely
+    // Parse and sort data chronologically (oldest first)
+    const processedData = data.map((row, index) => {
       const parseNumber = (value: string | number): number => {
         if (typeof value === 'number') return value;
         if (typeof value === 'string') {
@@ -96,30 +79,83 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         }
         return 0;
       };
+
+      // Parse date more accurately
+      const dateStr = row.Date;
+      let parsedDate = new Date();
       
-      const processedRow = {
-        date: formattedDate,
-        open: parseNumber(row.OPEN),
-        high: parseNumber(row.HIGH),
-        low: parseNumber(row.LOW),
-        close: parseNumber(row.close),
+      try {
+        // Handle DD-MMM-YY format like "11-Jul-25"
+        if (dateStr.includes('-')) {
+          const parts = dateStr.split('-');
+          if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const monthStr = parts[1];
+            let year = parseInt(parts[2]);
+            
+            // Convert 2-digit year to 4-digit
+            if (year < 50) year += 2000;
+            else if (year < 100) year += 1900;
+            
+            const monthMap: { [key: string]: number } = {
+              'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+              'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+            };
+            
+            const month = monthMap[monthStr] ?? 0;
+            parsedDate = new Date(year, month, day);
+          }
+        } else {
+          parsedDate = new Date(dateStr);
+        }
+      } catch (e) {
+        console.warn('Date parsing failed for:', dateStr);
+        parsedDate = new Date();
+      }
+
+      const open = parseNumber(row.OPEN);
+      const high = parseNumber(row.HIGH);
+      const low = parseNumber(row.LOW);
+      const close = parseNumber(row.close);
+      const prevClose = parseNumber(row['PREV. CLOSE']);
+      
+      // Calculate daily return
+      const dailyReturn = prevClose > 0 ? ((close - prevClose) / prevClose) * 100 : 0;
+
+      return {
+        date: parsedDate.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: '2-digit',
+          year: '2-digit'
+        }),
+        dateSort: parsedDate,
+        open,
+        high,
+        low,
+        close,
         volume: parseNumber(row.VOLUME),
+        vwap: parseNumber(row.vwap),
+        value: parseNumber(row.VALUE),
+        trades: parseNumber(row['No of trades']),
+        dailyReturn,
         index: index
       };
-      
-      console.log(`📈 Processed row ${index}:`, processedRow);
-      return processedRow;
     });
     
-    console.log('✅ Final chart data:', processedData);
-    return processedData;
+    // Sort by date (chronological order - oldest first)
+    const sortedData = processedData.sort((a, b) => a.dateSort.getTime() - b.dateSort.getTime());
+    
+    console.log('✅ Final sorted chart data (first 3):', sortedData.slice(0, 3));
+    console.log('✅ Final sorted chart data (last 3):', sortedData.slice(-3));
+    
+    return sortedData;
   }, [data]);
 
   const predictionData = useMemo(() => {
     if (!predictions || !chartData.length) return [];
     
     const lastDataPoint = chartData[chartData.length - 1];
-    const nextDate = new Date();
+    const nextDate = new Date(lastDataPoint.dateSort);
     nextDate.setDate(nextDate.getDate() + 1);
     
     const predictionPoint = {
@@ -128,13 +164,18 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         day: '2-digit',
         year: '2-digit'
       }),
+      dateSort: nextDate,
       close: predictions.targetPrice,
       high: predictions.predictedHigh,
       low: predictions.predictedLow,
       predicted: true,
       index: chartData.length,
       open: lastDataPoint.close,
-      volume: 0
+      volume: 0,
+      vwap: predictions.targetPrice,
+      value: 0,
+      trades: 0,
+      dailyReturn: 0
     };
     
     return [lastDataPoint, predictionPoint];
@@ -154,15 +195,17 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
       const isPredicted = data.predicted;
       
       return (
-        <div className="bg-white p-3 border rounded-lg shadow-lg">
-          <p className="font-medium">{label}</p>
-          {isPredicted && <p className="text-xs text-blue-600 font-medium">PREDICTED</p>}
-          <div className="space-y-1 text-sm">
-            {data.open > 0 && <p>Open: ₹{data.open.toFixed(2)}</p>}
-            <p>Close: ₹{data.close.toFixed(2)}</p>
-            {data.high > 0 && <p>High: ₹{data.high.toFixed(2)}</p>}
-            {data.low > 0 && <p>Low: ₹{data.low.toFixed(2)}</p>}
-            {data.volume > 0 && <p>Volume: {data.volume.toLocaleString()}</p>}
+        <div className="bg-white/95 backdrop-blur-sm p-4 border rounded-lg shadow-xl border-gray-200">
+          <p className="font-semibold text-gray-900 mb-2">{label}</p>
+          {isPredicted && <p className="text-xs text-blue-600 font-medium mb-2">🔮 PREDICTED</p>}
+          <div className="space-y-2 text-sm">
+            {data.open > 0 && <div className="flex justify-between gap-4"><span className="text-gray-600">Open:</span><span className="font-medium">₹{data.open.toFixed(2)}</span></div>}
+            <div className="flex justify-between gap-4"><span className="text-gray-600">Close:</span><span className="font-medium">₹{data.close.toFixed(2)}</span></div>
+            {data.high > 0 && <div className="flex justify-between gap-4"><span className="text-gray-600">High:</span><span className="font-medium text-green-600">₹{data.high.toFixed(2)}</span></div>}
+            {data.low > 0 && <div className="flex justify-between gap-4"><span className="text-gray-600">Low:</span><span className="font-medium text-red-600">₹{data.low.toFixed(2)}</span></div>}
+            {data.volume > 0 && <div className="flex justify-between gap-4"><span className="text-gray-600">Volume:</span><span className="font-medium">{data.volume.toLocaleString()}</span></div>}
+            {data.vwap > 0 && <div className="flex justify-between gap-4"><span className="text-gray-600">VWAP:</span><span className="font-medium">₹{data.vwap.toFixed(2)}</span></div>}
+            {data.dailyReturn !== 0 && <div className="flex justify-between gap-4"><span className="text-gray-600">Daily Return:</span><span className={`font-medium ${data.dailyReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>{data.dailyReturn.toFixed(2)}%</span></div>}
           </div>
         </div>
       );
@@ -170,9 +213,9 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
     return null;
   };
 
-  const CandlestickChart = () => (
+  const PriceChart = () => (
     <ResponsiveContainer width="100%" height={400}>
-      <ComposedChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      <ComposedChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis 
           dataKey="date" 
@@ -180,8 +223,9 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
           angle={-45}
           textAnchor="end"
           height={80}
+          interval="preserveStartEnd"
         />
-        <YAxis tick={{ fontSize: 12 }} />
+        <YAxis tick={{ fontSize: 12 }} domain={['dataMin - 5', 'dataMax + 5']} />
         <Tooltip content={<CustomTooltip />} />
         
         <Line 
@@ -189,8 +233,20 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
           dataKey="close" 
           stroke="#2563eb" 
           strokeWidth={2}
-          dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
+          dot={{ fill: '#2563eb', strokeWidth: 2, r: 3 }}
           connectNulls={false}
+          name="Close Price"
+        />
+        
+        <Line 
+          type="monotone" 
+          dataKey="vwap" 
+          stroke="#10b981" 
+          strokeWidth={1}
+          strokeDasharray="5 5"
+          dot={false}
+          connectNulls={false}
+          name="VWAP"
         />
         
         {predictionData.length > 1 && (
@@ -199,9 +255,10 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
             dataKey="close" 
             stroke="#dc2626" 
             strokeWidth={3}
-            strokeDasharray="5 5"
-            dot={{ fill: '#dc2626', strokeWidth: 2, r: 6 }}
+            strokeDasharray="8 4"
+            dot={{ fill: '#dc2626', strokeWidth: 2, r: 5 }}
             connectNulls={false}
+            name="Prediction"
           />
         )}
       </ComposedChart>
@@ -209,26 +266,60 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
   );
 
   const VolumeChart = () => (
-    <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={300}>
+      <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+        <XAxis 
+          dataKey="date" 
+          tick={{ fontSize: 10 }}
+          angle={-45}
+          textAnchor="end"
+          height={60}
+        />
         <YAxis tick={{ fontSize: 10 }} />
         <Tooltip content={<CustomTooltip />} />
         <Area 
           type="monotone" 
           dataKey="volume" 
-          stroke="#8884d8" 
-          fill="#8884d8" 
+          stroke="#8b5cf6" 
+          fill="#8b5cf6" 
           fillOpacity={0.6}
         />
       </AreaChart>
     </ResponsiveContainer>
   );
 
-  const PriceRangeChart = () => (
+  const ReturnsChart = () => (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
+        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+        <XAxis 
+          dataKey="date" 
+          tick={{ fontSize: 10 }}
+          angle={-45}
+          textAnchor="end"
+          height={60}
+        />
+        <YAxis tick={{ fontSize: 10 }} />
+        <Tooltip content={<CustomTooltip />} />
+        <Bar 
+          dataKey="dailyReturn"
+          fill={(entry) => entry.dailyReturn >= 0 ? '#10b981' : '#ef4444'}
+        >
+          {chartData.map((entry, index) => (
+            <Bar 
+              key={`cell-${index}`} 
+              fill={entry.dailyReturn >= 0 ? '#10b981' : '#ef4444'} 
+            />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
+  const CandlestickChart = () => (
     <ResponsiveContainer width="100%" height={400}>
-      <AreaChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+      <ComposedChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
         <XAxis 
           dataKey="date" 
@@ -246,7 +337,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
           stackId="1"
           stroke="#22c55e" 
           fill="#22c55e"
-          fillOpacity={0.3}
+          fillOpacity={0.2}
         />
         <Area 
           type="monotone" 
@@ -254,16 +345,24 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
           stackId="1"
           stroke="#ef4444" 
           fill="#ef4444"
-          fillOpacity={0.3}
+          fillOpacity={0.2}
         />
         <Line 
           type="monotone" 
           dataKey="close" 
           stroke="#2563eb" 
           strokeWidth={2}
+          dot={{ fill: '#2563eb', r: 3 }}
+        />
+        <Line 
+          type="monotone" 
+          dataKey="open" 
+          stroke="#f59e0b" 
+          strokeWidth={1}
+          strokeDasharray="3 3"
           dot={false}
         />
-      </AreaChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 
@@ -277,59 +376,169 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
     );
   }
 
+  const latestData = chartData[chartData.length - 1];
+  const previousData = chartData[chartData.length - 2];
+  const priceChange = previousData ? latestData.close - previousData.close : 0;
+  const priceChangePercent = previousData ? (priceChange / previousData.close) * 100 : 0;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <BarChart3 className="h-5 w-5 mr-2" />
-          Stock Price Analysis
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="price" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="price" className="flex items-center">
-              <TrendingUp className="h-4 w-4 mr-1" />
-              Price Chart
-            </TabsTrigger>
-            <TabsTrigger value="volume" className="flex items-center">
-              <BarChart3 className="h-4 w-4 mr-1" />
-              Volume
-            </TabsTrigger>
-            <TabsTrigger value="range" className="flex items-center">
-              <Activity className="h-4 w-4 mr-1" />
-              Price Range
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="price" className="mt-6">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-4 text-sm">
-                <div className="flex items-center">
-                  <div className="w-3 h-0.5 bg-blue-600 mr-2"></div>
-                  <span>Historical Price</span>
-                </div>
-                {predictions && (
-                  <div className="flex items-center">
-                    <div className="w-3 h-0.5 bg-red-600 border-dashed mr-2" style={{ borderTop: '2px dashed' }}></div>
-                    <span>Predicted Price</span>
-                  </div>
-                )}
+    <div className="space-y-6">
+      {/* Enhanced Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Current Price</p>
+                <p className="text-2xl font-bold">₹{latestData.close.toFixed(2)}</p>
+                <p className={`text-sm flex items-center ${priceChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {priceChange >= 0 ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
+                  {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
+                </p>
               </div>
-              <CandlestickChart />
+              <DollarSign className="h-8 w-8 text-blue-600" />
             </div>
-          </TabsContent>
-          
-          <TabsContent value="volume" className="mt-6">
-            <VolumeChart />
-          </TabsContent>
-          
-          <TabsContent value="range" className="mt-6">
-            <PriceRangeChart />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Volume</p>
+                <p className="text-2xl font-bold">{(latestData.volume / 1000000).toFixed(2)}M</p>
+                <p className="text-sm text-gray-500">shares traded</p>
+              </div>
+              <BarChart3 className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Day's Range</p>
+                <p className="text-lg font-bold">₹{latestData.low.toFixed(2)} - ₹{latestData.high.toFixed(2)}</p>
+                <p className="text-sm text-gray-500">L - H</p>
+              </div>
+              <Activity className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">VWAP</p>
+                <p className="text-2xl font-bold">₹{latestData.vwap.toFixed(2)}</p>
+                <p className="text-sm text-gray-500">Volume weighted</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enhanced Chart Tabs */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <BarChart3 className="h-5 w-5 mr-2" />
+            Advanced Stock Analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="price" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="price" className="flex items-center">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                Price & Prediction
+              </TabsTrigger>
+              <TabsTrigger value="candlestick" className="flex items-center">
+                <Activity className="h-4 w-4 mr-1" />
+                OHLC Analysis
+              </TabsTrigger>
+              <TabsTrigger value="volume" className="flex items-center">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Volume Analysis
+              </TabsTrigger>
+              <TabsTrigger value="returns" className="flex items-center">
+                <DollarSign className="h-4 w-4 mr-1" />
+                Daily Returns
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="price" className="mt-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-6 text-sm">
+                  <div className="flex items-center">
+                    <div className="w-3 h-0.5 bg-blue-600 mr-2"></div>
+                    <span>Close Price</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-0.5 bg-green-500 border-dashed mr-2" style={{ borderTop: '2px dashed' }}></div>
+                    <span>VWAP</span>
+                  </div>
+                  {predictions && (
+                    <div className="flex items-center">
+                      <div className="w-3 h-0.5 bg-red-600 mr-2" style={{ borderTop: '3px dashed' }}></div>
+                      <span>AI Prediction</span>
+                    </div>
+                  )}
+                </div>
+                <PriceChart />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="candlestick" className="mt-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-6 text-sm">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 opacity-20 mr-2"></div>
+                    <span>High Range</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-red-500 opacity-20 mr-2"></div>
+                    <span>Low Range</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-0.5 bg-blue-600 mr-2"></div>
+                    <span>Close</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-0.5 bg-yellow-600 border-dashed mr-2"></div>
+                    <span>Open</span>
+                  </div>
+                </div>
+                <CandlestickChart />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="volume" className="mt-6">
+              <VolumeChart />
+            </TabsContent>
+
+            <TabsContent value="returns" className="mt-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-6 text-sm">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-green-500 mr-2"></div>
+                    <span>Positive Returns</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-red-500 mr-2"></div>
+                    <span>Negative Returns</span>
+                  </div>
+                </div>
+                <ReturnsChart />
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
