@@ -67,7 +67,7 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
     
     console.log('📊 Processing stock data for chart:', data.length, 'rows');
     
-    // Parse and sort data chronologically (oldest first)
+    // Parse and sort data chronologically (earliest first)
     const processedData = data.map((row, index) => {
       const parseNumber = (value: string | number): number => {
         if (typeof value === 'number') return value;
@@ -79,12 +79,11 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         return 0;
       };
 
-      // Parse date more accurately
+      // Enhanced date parsing for DD-MMM-YY format
       const dateStr = row.Date;
       let parsedDate = new Date();
       
       try {
-        // Handle DD-MMM-YY format like "11-Jul-25"
         if (dateStr.includes('-')) {
           const parts = dateStr.split('-');
           if (parts.length === 3) {
@@ -92,9 +91,10 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
             const monthStr = parts[1];
             let year = parseInt(parts[2]);
             
-            // Convert 2-digit year to 4-digit
-            if (year < 50) year += 2000;
-            else if (year < 100) year += 1900;
+            // Convert 2-digit year to 4-digit (assuming 20xx for years 00-99)
+            if (year >= 0 && year <= 99) {
+              year += 2000;
+            }
             
             const monthMap: { [key: string]: number } = {
               'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
@@ -123,8 +123,8 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
 
       return {
         date: parsedDate.toLocaleDateString('en-US', { 
-          month: 'short', 
           day: '2-digit',
+          month: 'short', 
           year: '2-digit'
         }),
         dateSort: parsedDate,
@@ -137,15 +137,16 @@ const StockChart: React.FC<StockChartProps> = ({ data, predictions }) => {
         value: parseNumber(row.VALUE),
         trades: parseNumber(row['No of trades']),
         dailyReturn,
-        index: index
+        index: index,
+        originalDate: dateStr
       };
     });
     
-    // Sort by date (chronological order - oldest first)
+    // Sort by date in ASCENDING order (earliest first, latest last)
     const sortedData = processedData.sort((a, b) => a.dateSort.getTime() - b.dateSort.getTime());
     
-    console.log('✅ Final sorted chart data (first 3):', sortedData.slice(0, 3));
-    console.log('✅ Final sorted chart data (last 3):', sortedData.slice(-3));
+    console.log('✅ Sorted data - First date:', sortedData[0]?.originalDate, sortedData[0]?.dateSort);
+    console.log('✅ Sorted data - Last date:', sortedData[sortedData.length - 1]?.originalDate, sortedData[sortedData.length - 1]?.dateSort);
     
     return sortedData;
   }, [data]);
